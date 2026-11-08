@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدارة صالة الرياضة | FitPro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-4 md:p-8 font-sans">
+
+  <!-- Header -->
+  <header class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-4 pb-6 border-b border-zinc-800">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 text-2xl font-bold">
+        <i class="fa-solid fa-dumbbell"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-wide">FitPro <span class="text-amber-500">GYM</span></h1>
+        <p class="text-xs text-zinc-400">إدارة اشتراكات المنخرطين ومزامنة Google Sheets</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="toggleSettings()" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition">
+        <i class="fa-solid fa-gear text-amber-500"></i> إعدادات الشيت
+      </button>
+      <button onclick="openModal()" class="bg-amber-500 hover:bg-amber-400 text-black font-bold px-5 py-2 rounded-lg text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
+        <i class="fa-solid fa-user-plus"></i> إضافة منخرط جديد
+      </button>
+    </div>
+  </header>
+
+  <!-- Metrics / KPIs -->
+  <main class="max-w-6xl mx-auto mt-6 space-y-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
+        <div class="text-zinc-400 text-xs font-medium">إجمالي المنخرطين</div>
+        <div class="text-2xl font-black mt-2 text-white" id="totalMembers">0</div>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
+        <div class="text-zinc-400 text-xs font-medium">اشتراكات نشطة</div>
+        <div class="text-2xl font-black mt-2 text-emerald-400" id="activeMembers">0</div>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
+        <div class="text-zinc-400 text-xs font-medium">قريب ينتهي (≤ 5 أيام)</div>
+        <div class="text-2xl font-black mt-2 text-amber-400" id="expiringMembers">0</div>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
+        <div class="text-zinc-400 text-xs font-medium">اشتراكات منتهية</div>
+        <div class="text-2xl font-black mt-2 text-rose-500" id="expiredMembers">0</div>
+      </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="flex flex-col md:flex-row gap-3 justify-between items-center bg-zinc-900/40 p-3 rounded-xl border border-zinc-800">
+      <div class="relative w-full md:w-80">
+        <input type="text" id="searchInput" oninput="renderTable()" placeholder="بحث بالاسم أو الهاتف..." class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 pr-9 text-sm focus:outline-none focus:border-amber-500">
+        <i class="fa-solid fa-magnifying-glass absolute right-3 top-3 text-zinc-500 text-xs"></i>
+      </div>
+      <div class="flex gap-2 w-full md:w-auto">
+        <select id="filterStatus" onchange="renderTable()" class="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-amber-500">
+          <option value="all">كل الحالات</option>
+          <option value="active">نشط فقط</option>
+          <option value="expiring">قريب يسالي</option>
+          <option value="expired">منتهي</option>
+        </select>
+        <button onclick="syncFromSheets()" id="syncBtn" class="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2 border border-zinc-700">
+          <i class="fa-solid fa-arrows-rotate text-amber-400" id="syncIcon"></i> مزامنة
+        </button>
+      </div>
+    </div>
+
+    <!-- Members Table -->
+    <div class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/30">
+      <table class="w-full text-right text-sm">
+        <thead class="bg-zinc-900/80 text-zinc-400 text-xs border-b border-zinc-800">
+          <tr>
+            <th class="p-3">رقم العضوية</th>
+            <th class="p-3">الاسم الكامل</th>
+            <th class="p-3">الهاتف</th>
+            <th class="p-3">نوع الاشتراك</th>
+            <th class="p-3">تاريخ النهاية</th>
+            <th class="p-3">الأيام المتبقية</th>
+            <th class="p-3">الحالة</th>
+            <th class="p-3 text-center">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="membersTableBody" class="divide-y divide-zinc-800/60"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Add Member Modal -->
+  <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+        <h3 class="font-bold text-lg text-amber-500 flex items-center gap-2">
+          <i class="fa-solid fa-user-plus"></i> تسجيل منخرط جديد
+        </h3>
+        <button onclick="closeModal()" class="text-zinc-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form id="memberForm" onsubmit="saveMember(event)" class="grid grid-cols-2 gap-3 text-sm">
+        <div class="col-span-2">
+          <label class="block text-xs text-zinc-400 mb-1">الاسم الكامل *</label>
+          <input required id="mName" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">رقم الهاتف (واتساب) *</label>
+          <input required id="mPhone" type="tel" placeholder="06XXXXXXXX" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">نوع الاشتراك</label>
+          <select id="mPlan" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+            <option>كمال أجسام (شهري)</option>
+            <option>فيتنس / كارديو</option>
+            <option>اشتراك شامل (3 أشهر)</option>
+            <option>اشتراك سنوي</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">تاريخ البداية</label>
+          <input id="mStartDate" type="date" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">تاريخ النهاية</label>
+          <input required id="mEndDate" type="date" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">المبلغ المدفوع (درهم)</label>
+          <input id="mPaid" type="number" value="200" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1">المدرب المسؤول</label>
+          <input id="mTrainer" type="text" placeholder="اختياري" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 focus:border-amber-500 focus:outline-none">
+        </div>
+
+        <div class="col-span-2 pt-3 flex gap-2">
+          <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2.5 rounded-lg transition">تأكيد وحفظ</button>
+          <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg hover:bg-zinc-700">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4">
+      <h3 class="font-bold text-amber-500 flex items-center gap-2">
+        <i class="fa-solid fa-link"></i> ربط Google Sheets Web App
+      </h3>
+      <p class="text-xs text-zinc-400">حط هنا الرابط ديال Web App اللي خديتي من Apps Script (اللي كيسالي بـ /exec):</p>
+      <input id="sheetUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none">
+      <div class="flex gap-2">
+        <button onclick="saveSettings()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2 rounded-lg text-sm">حفظ الرابط</button>
+        <button onclick="toggleSettings()" class="px-4 bg-zinc-800 text-zinc-300 rounded-lg text-sm">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let members = JSON.parse(localStorage.getItem('fitpro_members') || '[]');
+    let sheetUrl = localStorage.getItem('fitpro_sheet_url') || '';
+
+    // Set default dates
+    const today = new Date().toISOString().split('T')[0];
+    const nextMonth = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
+    document.getElementById('mStartDate').value = today;
+    document.getElementById('mEndDate').value = nextMonth;
+    document.getElementById('sheetUrlInput').value = sheetUrl;
+
+    function saveSettings() {
+      sheetUrl = document.getElementById('sheetUrlInput').value.trim();
+      localStorage.setItem('fitpro_sheet_url', sheetUrl);
+      toggleSettings();
+      alert('تم حفظ رابط Google Sheets بنجاح!');
+    }
+
+    function toggleSettings() {
+      document.getElementById('settingsModal').classList.toggle('hidden');
+    }
+
+    function openModal() {
+      document.getElementById('addModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('addModal').classList.add('hidden');
+    }
+
+    function calculateDaysLeft(endDateStr) {
+      if (!endDateStr) return 0;
+      const end = new Date(endDateStr);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      const diffTime = end - now;
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function getStatusBadge(daysLeft) {
+      if (daysLeft < 0) return '<span class="bg-rose-500/10 text-rose-500 border border-rose-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">🔴 منتهي</span>';
+      if (daysLeft <= 5) return '<span class="bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">🟡 قريب ينتهي</span>';
+      return '<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">🟢 نشط</span>';
+    }
+
+    function renderTable() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const filter = document.getElementById('filterStatus').value;
+      const tbody = document.getElementById('membersTableBody');
+      tbody.innerHTML = '';
+
+      let activeCount = 0, expiringCount = 0, expiredCount = 0;
+
+      members.forEach((m, idx) => {
+        const daysLeft = calculateDaysLeft(m.endDate);
+        if (daysLeft < 0) expiredCount++;
+        else if (daysLeft <= 5) expiringCount++;
+        else activeCount++;
+
+        // Filters
+        let matchesFilter = true;
+        if (filter === 'active' && daysLeft < 0) matchesFilter = false;
+        if (filter === 'expiring' && (daysLeft > 5 || daysLeft < 0)) matchesFilter = false;
+        if (filter === 'expired' && daysLeft >= 0) matchesFilter = false;
+
+        const matchesSearch = (m.fullName || '').toLowerCase().includes(search) || (m.phone || '').includes(search);
+
+        if (matchesFilter && matchesSearch) {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-zinc-800/40 transition';
+          row.innerHTML = `
+            <td class="p-3 font-mono text-xs text-amber-400 font-bold">${m.membershipNumber || 'FP-' + (1000 + idx)}</td>
+            <td class="p-3 font-medium">${m.fullName}</td>
+            <td class="p-3 text-zinc-400 font-mono text-xs">${m.phone}</td>
+            <td class="p-3 text-xs text-zinc-300">${m.planName || 'عادي'}</td>
+            <td class="p-3 font-mono text-xs">${m.endDate}</td>
+            <td class="p-3 font-bold text-xs ${daysLeft < 0 ? 'text-rose-500' : (daysLeft <= 5 ? 'text-amber-400' : 'text-emerald-400')}">
+              ${daysLeft < 0 ? 'انتهى منذ ' + Math.abs(daysLeft) + ' يوم' : daysLeft + ' يوم'}
+            </td>
+            <td class="p-3">${getStatusBadge(daysLeft)}</td>
+            <td class="p-3 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <a href="https://wa.me/212${m.phone.replace(/^0/, '')}?text=السلام%20عليكم%20${encodeURIComponent(m.fullName)}،%20كنفكروك%20بلي%20اشتراكك%20فقاعة%20الرياضة%20${daysLeft < 0 ? 'راه%20سالا' : 'باقي%20ليه%20' + daysLeft + '%20أيام'}" target="_blank" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black rounded-lg transition" title="تنبيه عبر واتساب">
+                  <i class="fa-brands fa-whatsapp text-sm"></i>
+                </a>
+                <button onclick="renewMember(${idx})" class="p-1.5 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-black rounded-lg transition" title="تجديد شهر إضافي">
+                  <i class="fa-solid fa-rotate-right text-xs"></i>
+                </button>
+                <button onclick="deleteMember(${idx})" class="p-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg transition" title="حذف">
+                  <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(row);
+        }
+      });
+
+      document.getElementById('totalMembers').innerText = members.length;
+      document.getElementById('activeMembers').innerText = activeCount;
+      document.getElementById('expiringMembers').innerText = expiringCount;
+      document.getElementById('expiredMembers').innerText = expiredCount;
+    }
+
+    async function saveMember(e) {
+      e.preventDefault();
+      const newMember = {
+        membershipNumber: 'FP-' + Math.floor(1000 + Math.random() * 9000),
+        fullName: document.getElementById('mName').value,
+        phone: document.getElementById('mPhone').value,
+        planName: document.getElementById('mPlan').value,
+        startDate: document.getElementById('mStartDate').value,
+        endDate: document.getElementById('mEndDate').value,
+        paidAmount: Number(document.getElementById('mPaid').value) || 0,
+        trainerName: document.getElementById('mTrainer').value || '',
+        status: 'active'
+      };
+
+      members.unshift(newMember);
+      localStorage.setItem('fitpro_members', JSON.stringify(members));
+      renderTable();
+      closeModal();
+      document.getElementById('memberForm').reset();
+
+      // Send to Google Sheets if configured
+      if (sheetUrl) {
+        try {
+          fetch(sheetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(newMember),
+            redirect: 'follow'
+          });
+        } catch(err) {
+          console.error("Sheets sync failed:", err);
+        }
+      }
+    }
+
+    function renewMember(index) {
+      const currentEnd = new Date(members[index].endDate);
+      const baseDate = currentEnd > new Date() ? currentEnd : new Date();
+      baseDate.setDate(baseDate.getDate() + 30);
+      members[index].endDate = baseDate.toISOString().split('T')[0];
+      localStorage.setItem('fitpro_members', JSON.stringify(members));
+      renderTable();
+    }
+
+    function deleteMember(index) {
+      if (confirm('واش متأكد باغي تحذف هاد المنخرط؟')) {
+        members.splice(index, 1);
+        localStorage.setItem('fitpro_members', JSON.stringify(members));
+        renderTable();
+      }
+    }
+
+    async function syncFromSheets() {
+      if (!sheetUrl) {
+        alert('المرجو إدخال رابط Google Sheets من زر الإعدادات أولاً!');
+        toggleSettings();
+        return;
+      }
+      const icon = document.getElementById('syncIcon');
+      icon.classList.add('fa-spin');
+      try {
+        const res = await fetch(sheetUrl, { method: 'GET', redirect: 'follow' });
+        const data = await res.json();
+        if (data && data.data) {
+          members = data.data;
+          localStorage.setItem('fitpro_members', JSON.stringify(members));
+          renderTable();
+          alert('تمت مزامنة المنخرطين بنجاح من الشيت!');
+        }
+      } catch(err) {
+        alert('وقع خطأ فالمزامنة، تأكد من إعدادات النشر (Anyone) والرابط.');
+      } finally {
+        icon.classList.remove('fa-spin');
+      }
+    }
+
+    renderTable();
+  </script>
+</body>
+</html>
